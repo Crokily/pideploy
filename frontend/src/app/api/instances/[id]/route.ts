@@ -5,6 +5,7 @@ import { removeContainer } from "@/lib/docker";
 import { instanceIdSchema, updateInstanceSchema } from "@/lib/instance-schema";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,7 @@ type RouteContext = {
 type ErrorResponse = {
   error: string;
   details?: unknown;
+  retryAfter?: number;
 };
 
 type InstanceResponse = {
@@ -35,6 +37,21 @@ function notFound(): NextResponse<ErrorResponse> {
 
 function internalServerError(): NextResponse<ErrorResponse> {
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+}
+
+function tooManyRequests(retryAfter: number): NextResponse<ErrorResponse> {
+  return NextResponse.json(
+    { error: "Too many requests", retryAfter },
+    { status: 429 },
+  );
+}
+
+function redactInstanceSecrets(instance: Instance): Instance {
+  return {
+    ...instance,
+    botToken: null,
+    apiKey: null,
+  };
 }
 
 async function getValidatedId(
@@ -77,7 +94,7 @@ export async function GET(
       return notFound();
     }
 
-    return NextResponse.json({ instance });
+    return NextResponse.json({ instance: redactInstanceSecrets(instance) });
   } catch (error: unknown) {
     logger.error(
       { err: error, userId, instanceId: idResult.id },
@@ -179,6 +196,11 @@ export async function DELETE(
   }
 
   const userId = authResult;
+  const rateLimitResult = checkRateLimit(userId);
+  if (!rateLimitResult.allowed) {
+    return tooManyRequests(rateLimitResult.retryAfter ?? 1);
+  }
+
   const idResult = await getValidatedId(params);
   if (!idResult.ok) {
     return idResult.response;

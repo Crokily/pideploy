@@ -5,6 +5,7 @@ import { stopContainer } from "@/lib/docker";
 import { instanceIdSchema } from "@/lib/instance-schema";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,7 @@ type RouteContext = {
 type ErrorResponse = {
   error: string;
   details?: unknown;
+  retryAfter?: number;
 };
 
 type InstanceResponse = {
@@ -40,6 +42,13 @@ function internalServerError(): NextResponse<ErrorResponse> {
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }
 
+function tooManyRequests(retryAfter: number): NextResponse<ErrorResponse> {
+  return NextResponse.json(
+    { error: "Too many requests", retryAfter },
+    { status: 429 },
+  );
+}
+
 async function getValidatedId(
   params: RouteContext["params"],
 ): Promise<{ ok: true; id: string } | { ok: false; response: NextResponse<ErrorResponse> }> {
@@ -63,6 +72,11 @@ export async function POST(
   }
 
   const userId = authResult;
+  const rateLimitResult = checkRateLimit(userId);
+  if (!rateLimitResult.allowed) {
+    return tooManyRequests(rateLimitResult.retryAfter ?? 1);
+  }
+
   const idResult = await getValidatedId(params);
   if (!idResult.ok) {
     return idResult.response;

@@ -5,12 +5,14 @@ import { createContainer } from "@/lib/docker";
 import { createInstanceSchema } from "@/lib/instance-schema";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 type ErrorResponse = {
   error: string;
   details?: unknown;
+  retryAfter?: number;
 };
 
 type ListInstancesResponse = {
@@ -29,6 +31,21 @@ function internalServerError(): NextResponse<ErrorResponse> {
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }
 
+function tooManyRequests(retryAfter: number): NextResponse<ErrorResponse> {
+  return NextResponse.json(
+    { error: "Too many requests", retryAfter },
+    { status: 429 },
+  );
+}
+
+function redactInstanceSecrets(instance: Instance): Instance {
+  return {
+    ...instance,
+    botToken: null,
+    apiKey: null,
+  };
+}
+
 export async function GET(): Promise<
   NextResponse<ListInstancesResponse | ErrorResponse>
 > {
@@ -45,7 +62,9 @@ export async function GET(): Promise<
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ instances });
+    return NextResponse.json({
+      instances: instances.map((instance) => redactInstanceSecrets(instance)),
+    });
   } catch (error: unknown) {
     logger.error({ err: error, userId }, "Failed to fetch instances");
     return internalServerError();
@@ -61,6 +80,10 @@ export async function POST(
   }
 
   const userId = authResult;
+  const rateLimitResult = checkRateLimit(userId);
+  if (!rateLimitResult.allowed) {
+    return tooManyRequests(rateLimitResult.retryAfter ?? 1);
+  }
 
   let body: unknown;
   try {
