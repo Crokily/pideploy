@@ -1,4 +1,4 @@
-import type { Instance } from "@prisma/client";
+import { Prisma, type Instance } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, isAuthErrorResponse } from "@/lib/auth";
 import { instanceIdSchema, updateInstanceSchema } from "@/lib/instance-schema";
@@ -120,13 +120,27 @@ export async function PATCH(
     return invalidInput(parsed.error.issues);
   }
 
+  const { config, ...rest } = parsed.data;
+
+  const updateData: Prisma.InstanceUpdateManyMutationInput = {
+    ...rest,
+    ...(config !== undefined
+      ? {
+          config:
+            config === null
+              ? Prisma.JsonNull
+              : (config as Prisma.InputJsonValue),
+        }
+      : {}),
+  };
+
   try {
     const result = await prisma.instance.updateMany({
       where: {
         id: idResult.id,
         userId,
       },
-      data: parsed.data,
+      data: updateData,
     });
 
     if (result.count === 0) {

@@ -80,7 +80,13 @@ export async function POST(
   try {
     const instance = await prisma.instance.create({
       data: {
-        ...parsed.data,
+        name: parsed.data.name,
+        model: parsed.data.model,
+        channel: parsed.data.channel,
+        botToken: parsed.data.botToken,
+        apiKey: parsed.data.apiKey,
+        region: parsed.data.region,
+        instanceType: parsed.data.instanceType,
         userId,
         status: "pending",
       },
