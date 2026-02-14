@@ -88,3 +88,14 @@ Started: 2026-02-14
   - useUser() from @clerk/nextjs for client-side auth
   - useRouter() from next/navigation for programmatic navigation
 ---
+
+## 2026-02-14 08:20 - US-008: Make Dashboard Page Dynamic with Real Instance Data
+- Converted dashboard/page.tsx to client component
+- Fetches instances from GET /api/instances on mount
+- Shows instance cards with name, model, channel, status badge, creation date
+- Links to /dashboard/instances/[id]
+- Empty state with create button
+- **Learnings for future iterations:**
+  - fetch("/api/instances") works in client components (relative URL)
+  - Badge variant mapping: running→success, pending/creating→warning, error→danger, stopped→default
+---

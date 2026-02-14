@@ -146,7 +146,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-002 (API returns new fields). Replace the current static dashboard content. Can be a client component with useEffect + useState, or a server component with direct fetch. Badge component already supports variants: success, warning, danger, info."
     },
     {
