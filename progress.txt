@@ -99,3 +99,13 @@ Started: 2026-02-14
   - fetch("/api/instances") works in client components (relative URL)
   - Badge variant mapping: running→success, pending/creating→warning, error→danger, stopped→default
 ---
+
+## 2026-02-14 08:25 - US-009: Create Instance Detail Page (/dashboard/instances/[id])
+- Created frontend/src/app/dashboard/instances/[id]/page.tsx
+- Shows instance info card + container logs card
+- Fetches from /api/instances/{id} and /api/instances/{id}/logs
+- Back to Dashboard link, status badge, formatted dates
+- **Learnings for future iterations:**
+  - useParams() from next/navigation for dynamic route params
+  - Logs displayed in dark monospace <pre> block with max-h-[400px]
+---

@@ -165,7 +165,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-006 (logs API) and US-008 (cards link here). Use existing Card, Badge components. Logs section can be a client component that fetches on mount."
     },
     {
