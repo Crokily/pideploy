@@ -14,6 +14,8 @@ type Instance = {
   channel: string;
   status: string;
   containerId: string | null;
+  port: number | null;
+  gatewayToken: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -39,7 +41,11 @@ function getStatusVariant(
     return "success";
   }
 
-  if (normalizedStatus === "pending" || normalizedStatus === "creating") {
+  if (
+    normalizedStatus === "pending" ||
+    normalizedStatus === "creating" ||
+    normalizedStatus === "updating"
+  ) {
     return "warning";
   }
 
@@ -107,6 +113,12 @@ export default function InstanceDetailPage() {
   const [isFetching, setIsFetching] = useState(true);
   const [isNotFound, setIsNotFound] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
+
+  const dashboardUrl = instance
+    ? `https://${instance.id}.claw.a2a.ing`
+    : null;
 
   const loadInstanceDetails = useCallback(
     async (signal?: AbortSignal) => {
@@ -152,19 +164,25 @@ export default function InstanceDetailPage() {
           );
         }
 
-        const instanceResult = (await instanceResponse.json()) as InstanceResponse;
+        const instanceResult =
+          (await instanceResponse.json()) as InstanceResponse;
         if (!instanceResult.instance) {
-          throw new Error("Failed to load instance details. Please try again.");
+          throw new Error(
+            "Failed to load instance details. Please try again.",
+          );
         }
 
         if (!signal?.aborted) {
           setInstance(instanceResult.instance);
         }
 
-        const logsResponse = await fetch(`/api/instances/${encodedId}/logs`, {
-          cache: "no-store",
-          signal,
-        });
+        const logsResponse = await fetch(
+          `/api/instances/${encodedId}/logs`,
+          {
+            cache: "no-store",
+            signal,
+          },
+        );
 
         if (signal?.aborted) {
           return;
@@ -179,7 +197,10 @@ export default function InstanceDetailPage() {
         if (!logsResponse.ok) {
           const message = await readErrorMessage(logsResponse);
 
-          if (logsResponse.status === 400 && message === "Instance has no container") {
+          if (
+            logsResponse.status === 400 &&
+            message === "Instance has no container"
+          ) {
             setLogs("");
             return;
           }
@@ -237,6 +258,14 @@ export default function InstanceDetailPage() {
     void loadInstanceDetails();
   }, [loadInstanceDetails]);
 
+  const handleCopyToken = useCallback(() => {
+    if (instance?.gatewayToken) {
+      void navigator.clipboard.writeText(instance.gatewayToken);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 2000);
+    }
+  }, [instance?.gatewayToken]);
+
   if (!isLoaded) {
     return (
       <DashboardLayout>
@@ -262,6 +291,7 @@ export default function InstanceDetailPage() {
   const containerIdPreview = instance?.containerId
     ? instance.containerId.slice(0, 12)
     : "Not assigned";
+  const isRunning = instance?.status?.toLowerCase() === "running";
 
   return (
     <DashboardLayout>
@@ -312,6 +342,62 @@ export default function InstanceDetailPage() {
                   {formatStatus(instance.status)}
                 </Badge>
 
+                {/* Dashboard Access — shown when running */}
+                {isRunning && dashboardUrl ? (
+                  <div className="rounded-xl border border-primary-200 bg-primary-50/50 p-4 space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
+                      OpenClaw Dashboard
+                    </p>
+
+                    <div>
+                      <p className="text-sm text-secondary-600 mb-1">
+                        Dashboard URL
+                      </p>
+                      <a
+                        href={dashboardUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:text-primary-800 underline underline-offset-2"
+                      >
+                        {dashboardUrl}
+                        <span className="text-xs">↗</span>
+                      </a>
+                    </div>
+
+                    {instance.gatewayToken ? (
+                      <div>
+                        <p className="text-sm text-secondary-600 mb-1">
+                          Gateway Token
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 rounded-lg bg-white px-3 py-1.5 font-mono text-xs text-secondary-800 border border-secondary-200 break-all">
+                            {showToken
+                              ? instance.gatewayToken
+                              : "•".repeat(32)}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => setShowToken((v) => !v)}
+                            className="rounded-lg border border-secondary-200 px-2 py-1.5 text-xs text-secondary-600 hover:bg-secondary-100 transition-colors"
+                          >
+                            {showToken ? "Hide" : "Show"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCopyToken}
+                            className="rounded-lg border border-secondary-200 px-2 py-1.5 text-xs text-secondary-600 hover:bg-secondary-100 transition-colors"
+                          >
+                            {tokenCopied ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                        <p className="mt-1.5 text-xs text-secondary-500">
+                          Use this token to log into your OpenClaw Dashboard
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <dl className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <dt className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
@@ -327,7 +413,7 @@ export default function InstanceDetailPage() {
                       Channel
                     </dt>
                     <dd className="mt-1 text-sm text-secondary-800">
-                      {instance.channel}
+                      {instance.channel || "Not configured"}
                     </dd>
                   </div>
 
@@ -381,7 +467,9 @@ export default function InstanceDetailPage() {
                   {logs}
                 </pre>
               ) : (
-                <p className="text-sm text-secondary-600">No logs available</p>
+                <p className="text-sm text-secondary-600">
+                  No logs available
+                </p>
               )}
             </Card>
           </>

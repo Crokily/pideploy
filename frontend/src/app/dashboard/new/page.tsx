@@ -16,32 +16,40 @@ type CreateInstanceFormState = {
   model: string;
   channel: string;
   botToken: string;
+  aiProvider: string;
   apiKey: string;
 };
 
 type FieldErrors = Partial<
-  Record<"name" | "model" | "channel", string>
+  Record<"name" | "model" | "channel" | "botToken" | "apiKey", string>
 >;
 
 const modelOptions = [
-  { value: "", label: "Select an AI model" },
   { value: "claude-opus-4.5", label: "Claude Opus 4.5" },
   { value: "gpt-5.2", label: "GPT-5.2" },
   { value: "gemini-3-flash", label: "Gemini 3 Flash" },
 ];
 
 const channelOptions = [
-  { value: "", label: "Select a channel" },
+  { value: "", label: "Skip — configure later" },
   { value: "telegram", label: "Telegram" },
   { value: "discord", label: "Discord" },
-  { value: "whatsapp", label: "WhatsApp" },
+];
+
+const aiProviderOptions = [
+  { value: "", label: "Skip — configure later" },
+  { value: "anthropic", label: "Anthropic (Claude)" },
+  { value: "openai", label: "OpenAI (GPT)" },
+  { value: "gemini", label: "Google (Gemini)" },
+  { value: "openrouter", label: "OpenRouter" },
 ];
 
 const initialFormState: CreateInstanceFormState = {
   name: "",
-  model: "",
+  model: "claude-opus-4.5",
   channel: "",
   botToken: "",
+  aiProvider: "",
   apiKey: "",
 };
 
@@ -52,12 +60,12 @@ function validateForm(values: CreateInstanceFormState): FieldErrors {
     nextErrors.name = "Instance name is required";
   }
 
-  if (!values.model) {
-    nextErrors.model = "AI model is required";
+  if (values.channel && !values.botToken.trim()) {
+    nextErrors.botToken = "Bot token is required when a channel is selected";
   }
 
-  if (!values.channel) {
-    nextErrors.channel = "Channel is required";
+  if (values.aiProvider && !values.apiKey.trim()) {
+    nextErrors.apiKey = "API key is required when a provider is selected";
   }
 
   return nextErrors;
@@ -87,7 +95,7 @@ export default function NewInstancePage() {
     setFormValues((previous) => ({ ...previous, [name]: value }));
     setErrorMessage("");
 
-    if (name === "name" || name === "model" || name === "channel") {
+    if (name in fieldErrors) {
       setFieldErrors((previous) => ({ ...previous, [name]: undefined }));
     }
   };
@@ -112,8 +120,9 @@ export default function NewInstancePage() {
         body: JSON.stringify({
           name: formValues.name.trim(),
           model: formValues.model,
-          channel: formValues.channel,
+          channel: formValues.channel || undefined,
           botToken: formValues.botToken || undefined,
+          aiProvider: formValues.aiProvider || undefined,
           apiKey: formValues.apiKey || undefined,
         }),
       });
@@ -173,59 +182,111 @@ export default function NewInstancePage() {
     <DashboardLayout>
       <Card
         title="Create New Instance"
-        description="Configure your OpenClaw instance and deploy it in one step."
+        description="Configure your OpenClaw instance and deploy it in one click."
         variant="elevated"
       >
-        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-          <Input
-            label="Instance Name"
-            name="name"
-            value={formValues.name}
-            onChange={handleFieldChange}
-            error={fieldErrors.name}
-            placeholder="My OpenClaw Assistant"
-            required
-          />
+        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+          {/* Basic Config */}
+          <div className="space-y-4">
+            <Input
+              label="Instance Name"
+              name="name"
+              value={formValues.name}
+              onChange={handleFieldChange}
+              error={fieldErrors.name}
+              placeholder="My OpenClaw Assistant"
+              required
+            />
 
-          <Select
-            label="AI Model"
-            name="model"
-            value={formValues.model}
-            onChange={handleFieldChange}
-            error={fieldErrors.model}
-            options={modelOptions}
-            required
-          />
+            <Select
+              label="AI Model"
+              name="model"
+              value={formValues.model}
+              onChange={handleFieldChange}
+              options={modelOptions}
+            />
+          </div>
 
-          <Select
-            label="Channel"
-            name="channel"
-            value={formValues.channel}
-            onChange={handleFieldChange}
-            error={fieldErrors.channel}
-            options={channelOptions}
-            required
-          />
+          {/* Channel Config */}
+          <div className="space-y-3">
+            <div className="border-t border-secondary-200 pt-4">
+              <h3 className="text-sm font-medium text-secondary-900">
+                Channel Configuration
+              </h3>
+              <p className="mt-1 text-xs text-secondary-500">
+                Connect a messaging platform. You can always configure this later
+                via the Dashboard.
+              </p>
+            </div>
 
-          <Input
-            label="Bot Token"
-            name="botToken"
-            type="password"
-            value={formValues.botToken}
-            onChange={handleFieldChange}
-            placeholder="Optional"
-            autoComplete="off"
-          />
+            <Select
+              label="Channel"
+              name="channel"
+              value={formValues.channel}
+              onChange={handleFieldChange}
+              options={channelOptions}
+            />
 
-          <Input
-            label="API Key"
-            name="apiKey"
-            type="password"
-            value={formValues.apiKey}
-            onChange={handleFieldChange}
-            placeholder="Optional"
-            autoComplete="off"
-          />
+            {formValues.channel ? (
+              <div className="space-y-2">
+                <Input
+                  label="Bot Token"
+                  name="botToken"
+                  type="password"
+                  value={formValues.botToken}
+                  onChange={handleFieldChange}
+                  error={fieldErrors.botToken}
+                  placeholder={
+                    formValues.channel === "telegram"
+                      ? "123456:ABC-DEF..."
+                      : "MTI3NDU2Nzg5MDEy..."
+                  }
+                  autoComplete="off"
+                  required
+                />
+                <p className="text-xs text-secondary-500">
+                  {formValues.channel === "telegram"
+                    ? "Get your token from @BotFather on Telegram"
+                    : "Get your token from Discord Developer Portal → Bot → Reset Token"}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          {/* AI Provider Config */}
+          <div className="space-y-3">
+            <div className="border-t border-secondary-200 pt-4">
+              <h3 className="text-sm font-medium text-secondary-900">
+                AI Provider
+              </h3>
+              <p className="mt-1 text-xs text-secondary-500">
+                Provide an API key for your AI provider. You can also configure
+                this later via the Web Terminal.
+              </p>
+            </div>
+
+            <Select
+              label="Provider"
+              name="aiProvider"
+              value={formValues.aiProvider}
+              onChange={handleFieldChange}
+              options={aiProviderOptions}
+            />
+
+            {formValues.aiProvider ? (
+              <Input
+                label="API Key"
+                name="apiKey"
+                type="password"
+                value={formValues.apiKey}
+                onChange={handleFieldChange}
+                error={fieldErrors.apiKey}
+                placeholder="sk-..."
+                autoComplete="off"
+                required
+              />
+            ) : null}
+          </div>
 
           {errorMessage ? (
             <div
@@ -236,7 +297,7 @@ export default function NewInstancePage() {
             </div>
           ) : null}
 
-          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 border-t border-secondary-200 pt-4 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="secondary"
@@ -246,7 +307,7 @@ export default function NewInstancePage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isSubmitting}>
-              {isSubmitting ? "Creating Instance..." : "Create Instance"}
+              {isSubmitting ? "Deploying Instance..." : "Deploy Instance"}
             </Button>
           </div>
         </form>
