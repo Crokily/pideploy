@@ -1,7 +1,7 @@
 {
   "project": "ClawDeploy",
-  "branchName": "ralph/stages-3-5",
-  "description": "Docker container management, frontend-backend integration, and production polish for the ClawDeploy OpenClaw one-click deployment SaaS platform.",
+  "branchName": "ralph/openclaw-real-deployment",
+  "description": "Replace mock nginx:alpine with real OpenClaw containers: build image, generate config, wildcard SSL subdomain routing, web terminal, and end-to-end integration.",
   "qualityChecks": {
     "typecheck": "cd frontend && npx tsc --noEmit",
     "lint": "cd frontend && npm run lint",
@@ -10,251 +10,239 @@
   "userStories": [
     {
       "id": "US-001",
-      "title": "Update Prisma Schema with OpenClaw Instance Fields",
-      "description": "As a developer, I need the database schema to include all fields required for OpenClaw deployments (model, channel, botToken, apiKey, containerId, config) so that the API can store complete instance configuration.",
+      "title": "Build OpenClaw Docker Image on Server",
+      "description": "As a developer, I need the real OpenClaw Docker image built on the server so that instances can run actual OpenClaw gateways.",
       "acceptanceCriteria": [
-        "Prisma schema Instance model updated: added model (String), channel (String), botToken (String, optional), apiKey (String, optional), containerId (String, optional), config (Json, optional, default {})",
-        "Existing region and instanceType fields changed to optional for backward compatibility",
-        "status field allows values: pending, creating, running, stopped, error, deleted",
-        "npx prisma db push succeeds against Neon database",
-        "npx prisma generate succeeds",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "Script scripts/build-openclaw-image.sh created",
+        "Script clones https://github.com/openclaw/openclaw.git to /opt/openclaw-src (if not already present)",
+        "Script runs docker build -t openclaw:local -f Dockerfile . from the cloned repo",
+        "Script is idempotent (skip clone if dir exists, always rebuild image)",
+        "docker images openclaw:local shows the built image after running the script",
+        "Script committed to the repo"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "This is the foundation \u2014 all subsequent stories depend on the updated schema. Reference backend/schema.sql for the intended field set. Use prisma db push, not SQL migrations."
+      "passes": false,
+      "notes": "No frontend code changes. The OpenClaw Dockerfile uses node:22-bookworm base, requires pnpm and bun. Build may take 5-10 minutes. 34GB free disk should be sufficient."
     },
     {
       "id": "US-002",
-      "title": "Update Zod Validation Schemas and CRUD API Routes",
-      "description": "As a developer, I need the Zod validation schemas and existing API route handlers to accept and validate the new instance fields so that the API can create and update instances with full configuration.",
+      "title": "Create Instance Persistent Storage and Config Generator",
+      "description": "As a developer, I need a service that creates persistent directories and generates the correct openclaw.json config file for each instance.",
       "acceptanceCriteria": [
-        "createInstanceSchema requires name, model (enum: claude-opus-4.5, gpt-5.2, gemini-3-flash), channel (enum: telegram, discord, whatsapp); optional botToken, apiKey, region, instanceType",
-        "updateInstanceSchema allows patching name, status, botToken, apiKey, config",
-        "instanceStatusSchema includes creating and deleted values",
-        "POST /api/instances route creates instances with new fields",
-        "PATCH /api/instances/[id] route updates instances with new fields",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Lint passes: cd frontend && npm run lint",
+        "New file frontend/src/lib/instance-config.ts created",
+        "Function createInstanceStorage(instanceId) creates /data/clawdeploy/{instanceId}/config/ and /data/clawdeploy/{instanceId}/workspace/",
+        "Function generateOpenClawConfig(params) generates valid openclaw.json with gateway.mode=local, gateway.port=18789, gateway.bind=lan, gateway.auth.mode=token + generated token, gateway.tailscale.mode=off, wizard metadata, and optional channels.telegram / channels.discord config",
+        "Function generateEnvFile(params) generates .env content with optional API key env vars",
+        "Function writeInstanceConfig(instanceId, config, envContent) writes openclaw.json and .env to the config directory",
+        "Function removeInstanceStorage(instanceId) removes the instance directories",
+        "Gateway token generated using crypto.randomBytes(32).toString('hex')",
+        "Typecheck passes: cd frontend && npx tsc --noEmit",
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Depends on US-001. Update frontend/src/lib/instance-schema.ts and both route files. Keep the existing auth middleware and error handling patterns."
+      "passes": false,
+      "notes": "Config structure derived from OpenClaw source: agents.defaults.workspace=/home/node/.openclaw/workspace, gateway config, optional channel tokens. Directories must be writable by UID 1000 (node user in container)."
     },
     {
       "id": "US-003",
-      "title": "Install Docker Engine on the Server",
-      "description": "As a developer, I need Docker Engine installed and running on the Ubuntu server so that the application can manage containers programmatically.",
+      "title": "Update Docker Service for OpenClaw Containers",
+      "description": "As a developer, I need the Docker service module updated to create real OpenClaw containers with proper volumes, ports, environment variables, and resource limits.",
       "acceptanceCriteria": [
-        "Shell script scripts/install-docker.sh created that installs Docker Engine on Ubuntu via official Docker apt repo",
-        "Script is idempotent (safe to run twice)",
-        "Docker daemon is running: docker info succeeds",
-        "Current user can run Docker without sudo (added to docker group)",
-        "docker run --rm hello-world succeeds",
-        "Script committed to the repo"
+        "frontend/src/lib/docker.ts updated: createContainer accepts typed options (instanceId, gatewayToken, envVars, channelConfig)",
+        "Image changed from nginx:alpine to openclaw:local",
+        "Container exposes port 18789 mapped to random host port (range 10000-20000)",
+        "Volumes: /data/clawdeploy/{id}/config:/home/node/.openclaw and /data/clawdeploy/{id}/workspace:/home/node/.openclaw/workspace",
+        "Env vars: HOME=/home/node, TERM=xterm-256color, OPENCLAW_GATEWAY_TOKEN={token}, plus optional API key vars",
+        "Container command: node dist/index.js gateway --bind lan --port 18789 --allow-unconfigured",
+        "Resource limits: 1 CPU (NanoCpus: 1000000000), 1GB memory (1073741824 bytes)",
+        "Restart policy: unless-stopped, init: true",
+        "createContainer returns { containerId, port, gatewayToken }",
+        "New function execInContainer(containerId, command[]) for running commands inside container",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Docker is NOT currently installed on the server. This story has no frontend code changes so typecheck/build are not required. Run the script after creating it to actually install Docker."
+      "passes": false,
+      "notes": "Depends on US-001 (image) and US-002 (storage). The dist/index.js path matches docker-compose.yml from OpenClaw repo. User 'node' (UID 1000) is the default in the OpenClaw image."
     },
     {
       "id": "US-004",
-      "title": "Create Docker Service Module",
-      "description": "As a developer, I need a Docker service module that wraps container operations (create, start, stop, remove, status, logs) so that API routes can manage containers through a clean interface.",
+      "title": "Update Instance Creation API to Wire Everything Together",
+      "description": "As a developer, I need the POST /api/instances endpoint to orchestrate storage creation, config generation, and container startup.",
       "acceptanceCriteria": [
-        "dockerode npm package added to frontend dependencies",
-        "@types/dockerode added as devDependency",
-        "frontend/src/lib/docker.ts created with exported async functions: createContainer(options), startContainer(containerId), stopContainer(containerId), removeContainer(containerId), getContainerStatus(containerId), getContainerLogs(containerId, tail?)",
-        "createContainer uses nginx:alpine image, maps a dynamic host port (range 10000-20000) to container port 80, sets CPU limits (NanoCpus: 500000000 = 0.5 CPU) and memory limit (256MB), enables auto-restart (unless-stopped)",
-        "Container names follow pattern clawdeploy-{instanceId}",
-        "All functions include proper error handling with typed error responses",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "POST /api/instances flow: (1) create DB record, (2) createInstanceStorage, (3) generateOpenClawConfig + writeInstanceConfig, (4) createContainer with Docker, (5) update DB with containerId + port + gatewayToken",
+        "Prisma schema updated: add port (Int optional) and gatewayToken (String optional) fields to Instance model",
+        "prisma db push succeeds",
+        "prisma generate succeeds",
+        "Request body accepts optional: botToken, apiKey, aiProvider (string), channel (telegram/discord or empty)",
+        "Gateway token and port stored in DB",
+        "On Docker failure: storage cleaned up, DB status set to error",
+        "DELETE endpoint also calls removeInstanceStorage to clean volumes",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Depends on US-003 (Docker must be installed). The module connects to the local Docker socket at /var/run/docker.sock. Pull nginx:alpine image first if not present."
+      "passes": false,
+      "notes": "Depends on US-002, US-003. The channel field is now optional with empty string meaning 'skip'. This is the central orchestration story."
     },
     {
       "id": "US-005",
-      "title": "Integrate Docker with Instance Creation and Deletion APIs",
-      "description": "As a developer, I need the POST /api/instances route to create a Docker container and the DELETE /api/instances/[id] route to remove it, so that instance lifecycle is synchronized with containers.",
+      "title": "Install Certbot Cloudflare Plugin and Obtain Wildcard SSL Certificate",
+      "description": "As a developer, I need a wildcard SSL certificate for *.claw.a2a.ing using Let's Encrypt with Cloudflare DNS validation.",
       "acceptanceCriteria": [
-        "POST /api/instances: after DB insert, calls createContainer(), updates instance with containerId and status creating, then calls startContainer() and updates status to running",
-        "If container creation fails, instance status is set to error and error is logged",
-        "DELETE /api/instances/[id]: stops and removes the Docker container (if containerId exists) before deleting the DB record",
-        "If container removal fails (e.g. container already gone), deletion continues gracefully",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "Script scripts/setup-ssl-wildcard.sh created",
+        "Script installs python3-certbot-dns-cloudflare package",
+        "Script creates /etc/letsencrypt/cloudflare.ini with API token from CLOUDFLARE_API_TOKEN env var",
+        "Script runs certbot with --dns-cloudflare authenticator for domains: claw.a2a.ing and *.claw.a2a.ing",
+        "Certificate files exist at /etc/letsencrypt/live/claw.a2a.ing/",
+        "Cloudflare credentials file has chmod 600",
+        "Script is idempotent (checks if cert exists before requesting)",
+        "Script committed (without secrets)"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Depends on US-004. Import functions from frontend/src/lib/docker.ts. Wrap Docker operations in try/catch so DB operations are not blocked by Docker failures."
+      "passes": false,
+      "notes": "No frontend changes. User must: (1) create Cloudflare API token with Zone:DNS:Edit for a2a.ing, (2) add DNS A records for claw and *.claw pointing to server IP with proxy OFF. The script reads CLOUDFLARE_API_TOKEN from env."
     },
     {
       "id": "US-006",
-      "title": "Add Container Action API Endpoints (Start / Stop / Logs)",
-      "description": "As a user, I want API endpoints to start, stop, and view logs for my instances so that I can control their lifecycle remotely.",
+      "title": "Configure Nginx Wildcard Reverse Proxy with Dynamic Port Resolution",
+      "description": "As a developer, I need Nginx configured to route {instanceId}.claw.a2a.ing to the correct container port.",
       "acceptanceCriteria": [
-        "POST /api/instances/[id]/start \u2014 starts container via Docker service, updates DB status to running, returns updated instance",
-        "POST /api/instances/[id]/stop \u2014 stops container via Docker service, updates DB status to stopped, returns updated instance",
-        "GET /api/instances/[id]/logs \u2014 returns last 100 lines of container logs as { logs: string }; accepts optional ?tail=N query param",
-        "All three endpoints require Clerk auth and verify instance ownership (userId match)",
-        "Returns 404 if instance not found or not owned by user",
-        "Returns 400 if instance has no containerId",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Lint passes: cd frontend && npm run lint",
-        "Build passes: cd frontend && npm run build"
+        "Nginx config /etc/nginx/sites-available/claw.a2a.ing created with wildcard server block",
+        "Server listens on 443 SSL with wildcard cert from US-005",
+        "Server name regex: ~^(?<instance_id>.+)\\.claw\\.a2a\\.ing$",
+        "Uses map directive in /etc/nginx/conf.d/clawdeploy-ports.conf for port resolution",
+        "WebSocket support: proxy_set_header Upgrade and Connection headers",
+        "HTTP 80 redirect to HTTPS",
+        "Plain claw.a2a.ing server block returns info page or redirect",
+        "New utility file frontend/src/lib/nginx.ts with function updateNginxPortMap(instances) that writes map file and reloads nginx",
+        "Sudoers entry for the app user to run nginx -s reload without password",
+        "nginx -t passes",
+        "Symlinked to sites-enabled",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Depends on US-004 and US-005. Create three new route files: frontend/src/app/api/instances/[id]/start/route.ts, stop/route.ts, logs/route.ts. Follow the same auth pattern as existing [id]/route.ts."
+      "passes": false,
+      "notes": "Depends on US-005. The map file format: map $instance_id $clawdeploy_port { default 0; \"id1\" 12345; }. The updateNginxPortMap function queries the database for all running instances and regenerates the file. Returns 502 for unknown instance IDs."
     },
     {
       "id": "US-007",
-      "title": "Create Instance Creation Page (/dashboard/new)",
-      "description": "As a user, I want a form at /dashboard/new to create a new OpenClaw instance by selecting a model, channel, and providing my API credentials, so that I can deploy with a few clicks.",
+      "title": "Update Create Instance Form with Channel and AI Config",
+      "description": "As a user, I want the instance creation form to optionally accept channel and AI provider configuration.",
       "acceptanceCriteria": [
-        "New page at frontend/src/app/dashboard/new/page.tsx using DashboardLayout",
-        "Form fields: Instance Name (text input, required), Model (select: Claude Opus 4.5 / GPT-5.2 / Gemini 3 Flash), Channel (select: Telegram / Discord / WhatsApp), Bot Token (password input, optional), API Key (password input, optional)",
-        "Form validates client-side before submission (name required, model required, channel required)",
-        "On submit: POST to /api/instances with form data, show loading spinner on button",
-        "On success: redirect to /dashboard",
-        "On error: show error message inline below the form",
-        "Cancel button navigates back to /dashboard",
-        "Page protected by Clerk auth (redirect to / if unauthenticated)",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "/dashboard/new form updated with channel section: radio buttons for Telegram / Discord / Skip (default)",
+        "Bot token input shown only when channel selected, with helper text",
+        "AI Provider section: select for Anthropic / OpenAI / Gemini / OpenRouter / Skip (default)",
+        "API Key input shown only when provider selected, type=password",
+        "Form submits optional fields to API",
+        "Validation: channel selected requires bot token; provider selected requires API key",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Depends on US-002 (API must accept new fields). This is a client component ('use client') since it has form state and event handlers. Use existing UI components: Input, Select, Button, Card from @/components/ui."
+      "passes": false,
+      "notes": "Keep the form clean. Skip defaults make zero-config creation possible. Helper text for bot tokens: Telegram → 'Chat with @BotFather on Telegram', Discord → 'Discord Developer Portal → Bot → Reset Token'."
     },
     {
       "id": "US-008",
-      "title": "Make Dashboard Page Dynamic with Real Instance Data",
-      "description": "As a user, I want the dashboard to show my actual deployed instances with real status information, so that I can monitor my deployments at a glance.",
+      "title": "Update Instance Detail Page with Dashboard Link and Token",
+      "description": "As a user, I want to see my OpenClaw Dashboard URL and gateway token on the instance detail page.",
       "acceptanceCriteria": [
-        "Dashboard page fetches instances from GET /api/instances on load",
-        "Each instance displayed as a Card showing: name, model, channel, status badge (color-coded: green=running, yellow=pending/creating, red=error, gray=stopped), and creation date",
-        "EmptyState shown when user has zero instances, with Create New Instance button linking to /dashboard/new",
-        "If fetch fails, an error message is displayed",
-        "Instance cards link to /dashboard/instances/[id]",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "Instance detail page shows Dashboard URL: https://{instanceId}.claw.a2a.ing",
+        "URL is clickable link opening in new tab",
+        "Gateway Token shown with copy button, masked by default, click to reveal",
+        "Helper text: Use this token to log into your OpenClaw Dashboard",
+        "Dashboard URL and token only shown when status is running",
+        "GET /api/instances/[id] returns port and gatewayToken to owning user only",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Depends on US-002 (API returns new fields). Replace the current static dashboard content. Can be a client component with useEffect + useState, or a server component with direct fetch. Badge component already supports variants: success, warning, danger, info."
+      "passes": false,
+      "notes": "The gatewayToken was previously redacted. Now return it only to the owning user. Add a URL-based quick-login hint: users can append ?token=xxx to auto-authenticate in the OpenClaw Dashboard."
     },
     {
       "id": "US-009",
-      "title": "Create Instance Detail Page (/dashboard/instances/[id])",
-      "description": "As a user, I want a detail page for each instance showing its full configuration, live status, and recent logs, so that I can monitor and troubleshoot deployments.",
+      "title": "Web Terminal Backend — Container Exec WebSocket Server",
+      "description": "As a developer, I need a WebSocket server that streams a container shell to the browser for web terminal functionality.",
       "acceptanceCriteria": [
-        "New page at frontend/src/app/dashboard/instances/[id]/page.tsx using DashboardLayout",
-        "Fetches instance data from GET /api/instances/[id]",
-        "Displays: instance name, model, channel, status badge, containerId (truncated), creation date, last updated date",
-        "Displays container logs in a scrollable monospace <pre> block, fetched from GET /api/instances/[id]/logs",
-        "Shows Instance not found message if 404 returned",
-        "Back to Dashboard link at top",
-        "Page protected by Clerk auth",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "New file frontend/src/terminal-server.ts created — standalone Express+ws server on port 3001",
+        "WebSocket endpoint: /ws/terminal/{instanceId}",
+        "Authenticates via query param token (matches Clerk session token, verified server-side)",
+        "Verifies instance ownership by querying the database",
+        "Uses dockerode container.exec() to start bash (fallback sh) with TTY",
+        "Bidirectional streaming: WS messages → exec stdin, exec stdout → WS messages",
+        "Handles resize messages: JSON {type: 'resize', cols: number, rows: number}",
+        "Cleanup on disconnect: kills exec process",
+        "Only instance owner can connect",
+        "Server starts via a separate npm script or process",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Depends on US-006 (logs API) and US-008 (cards link here). Use existing Card, Badge components. Logs section can be a client component that fetches on mount."
+      "passes": false,
+      "notes": "Separate from Next.js because App Router doesn't support raw WebSocket upgrades. This is a small ~100-line server. In production, run it alongside Next.js via PM2 or systemd. Use ws npm package."
     },
     {
       "id": "US-010",
-      "title": "Add Start / Stop / Delete Action Buttons in UI",
-      "description": "As a user, I want buttons to start, stop, and delete my instances from both the dashboard cards and the detail page, so that I can control deployments without using the terminal.",
+      "title": "Web Terminal Frontend — xterm.js Integration",
+      "description": "As a user, I want a web terminal on the instance detail page to run CLI commands inside my container.",
       "acceptanceCriteria": [
-        "Each instance card on the dashboard includes inline action buttons for Start, Stop, Delete",
-        "Instance detail page has prominent Start, Stop, Delete buttons in a toolbar area",
-        "Start button calls POST /api/instances/[id]/start, disabled when status is running",
-        "Stop button calls POST /api/instances/[id]/stop, disabled when status is stopped",
-        "Delete button shows a confirmation Modal dialog before calling DELETE /api/instances/[id]; on success redirects to /dashboard",
-        "Buttons show loading state during API call",
-        "On success, instance data is refreshed to show new status",
-        "On error, inline error message displayed",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "@xterm/xterm and @xterm/addon-fit packages installed",
+        "New component frontend/src/components/WebTerminal.tsx created",
+        "Component uses dynamic import (next/dynamic, ssr: false)",
+        "Renders xterm.js terminal connecting to WS endpoint from US-009",
+        "Terminal auto-fits to container, handles resize",
+        "Open Terminal button on instance detail page (shown when status is running)",
+        "Terminal opens in modal or expandable panel",
+        "Reconnect button on disconnect",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Depends on US-006 (action APIs), US-008 (dashboard cards), US-009 (detail page). Use existing Button and Modal components. Consider extracting an InstanceActions component shared between dashboard and detail page."
+      "passes": false,
+      "notes": "xterm.js is browser-only. Must use dynamic import. The terminal gives full CLI access for openclaw onboard, openclaw configure, openclaw channels add, etc."
     },
     {
       "id": "US-011",
-      "title": "Instance State Sync (Container Status Polling)",
-      "description": "As a developer, I need a mechanism to periodically sync Docker container state to the database so that the dashboard always reflects reality, even if containers crash or stop externally.",
+      "title": "Instance Update (Rebuild) Functionality",
+      "description": "As a user, I want an Update button to update OpenClaw to the latest version.",
       "acceptanceCriteria": [
-        "New file frontend/src/lib/state-sync.ts with a syncInstanceStates() function that: queries all instances with status running or creating, checks each container actual status via Docker service, updates DB if status has diverged",
-        "New API route POST /api/admin/sync (protected with a secret header X-Sync-Secret matching env SYNC_SECRET) that runs the sync",
-        "If a container is not found (removed externally), instance status is set to error",
-        "Sync function logs each status change via Pino logger",
-        "Dashboard page polls GET /api/instances every 30 seconds to refresh instance list (client-side setInterval)",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "New API endpoint POST /api/instances/[id]/update created",
+        "Flow: stop container → remove container → git pull + docker build (if needed) → recreate container with same config/volumes/port → start",
+        "Update button on instance detail page",
+        "Button shows loading state during update",
+        "Instance status changes to updating during process",
+        "On failure: status set to error with message",
+        "Shared image rebuild: track if rebuild in progress to avoid duplicates",
+        "Typecheck passes",
+        "Build passes"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": "Depends on US-004 (Docker service) and US-008 (dynamic dashboard). The admin/sync endpoint can be called by an external cron or manually. The client-side polling is a simpler mechanism for keeping the UI fresh."
+      "passes": false,
+      "notes": "Image rebuild is shared across all instances. Use a simple lock file to prevent concurrent rebuilds. After rebuild, only the requesting instance's container is recreated."
     },
     {
       "id": "US-012",
-      "title": "Loading States and Error Boundaries",
-      "description": "As a user, I want to see appropriate loading indicators and friendly error messages so that the app feels polished and I know what's happening.",
+      "title": "End-to-End Integration Testing and Polish",
+      "description": "As a developer, I need to verify the complete flow works and fix remaining issues.",
       "acceptanceCriteria": [
-        "Next.js loading.tsx added to /dashboard route segment \u2014 displays LoadingSpinner centered in DashboardLayout",
-        "Next.js error.tsx boundary added to /dashboard route segment \u2014 displays a user-friendly error card with a Try Again button (must be a client component with 'use client')",
-        "Dashboard page shows LoadingSpinner while instances are being fetched",
-        "Instance detail page shows LoadingSpinner while data loads",
-        "All API-calling components handle and display error states (not silent failures)",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
+        "Can create instance via UI (with or without channel config)",
+        "Container starts and OpenClaw gateway is reachable on mapped port",
+        "{instanceId}.claw.a2a.ing loads OpenClaw Dashboard in browser",
+        "Web Terminal connects and can run openclaw doctor",
+        "Stop and restart preserves configuration",
+        "Delete cleans up container, storage, and Nginx port map",
+        "Error states handled gracefully",
+        "Nginx port map regenerated correctly on all lifecycle events",
+        "Typecheck passes",
+        "Lint passes",
+        "Build passes"
       ],
       "priority": 12,
-      "passes": true,
-      "notes": "Depends on US-008, US-009. Use existing LoadingSpinner and Card components. error.tsx must use 'use client' directive and accept error and reset props."
-    },
-    {
-      "id": "US-013",
-      "title": "Rate Limiting, Security Hardening, and Health Check",
-      "description": "As a developer, I need rate limiting on API routes, secure handling of sensitive data, and a health check endpoint for monitoring, so that the platform is production-ready.",
-      "acceptanceCriteria": [
-        "Simple in-memory rate limiter in frontend/src/lib/rate-limit.ts using a Map with sliding window (60 requests/minute per userId)",
-        "Rate limiter applied to POST /api/instances, DELETE /api/instances/[id], POST /api/instances/[id]/start, POST /api/instances/[id]/stop; returns 429 with { error: 'Too many requests' } when exceeded",
-        "Bot tokens and API keys are never returned in API GET responses \u2014 redacted to '***' or omitted in GET /api/instances and GET /api/instances/[id]",
-        "GET /api/health endpoint returns { status: 'ok', timestamp: ISO string, docker: 'connected' | 'disconnected' } \u2014 no auth required",
-        "Health check verifies Docker daemon connectivity via dockerode ping",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Lint passes: cd frontend && npm run lint",
-        "Build passes: cd frontend && npm run build"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Depends on US-005, US-006. Rate limiter uses in-memory Map \u2014 acceptable for single-server deployment. Cleanup stale entries periodically to prevent memory leaks."
-    },
-    {
-      "id": "US-014",
-      "title": "SEO Meta Tags, README, and API Documentation",
-      "description": "As a developer and product owner, I need proper SEO on public pages, an updated README, and API documentation so that the project is presentable and maintainable.",
-      "acceptanceCriteria": [
-        "Landing page (/) has proper <title>, <meta name='description'>, and Open Graph tags via Next.js metadata export",
-        "Dashboard pages have appropriate <title> tags (e.g. 'Dashboard | ClawDeploy', 'New Instance | ClawDeploy')",
-        "README.md at repo root updated with: project overview, tech stack, prerequisites (Node 22+, Docker), setup instructions (env vars, prisma db push, npm run dev), API endpoint reference table, architecture overview",
-        "docs/api.md created with full API documentation: all endpoints, request/response examples, auth requirements, error codes",
-        "TypeScript check passes: cd frontend && npx tsc --noEmit",
-        "Build passes: cd frontend && npm run build"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "This is the final polish story. Minimal code changes \u2014 mostly metadata exports and markdown files. For Next.js metadata, export const metadata from page.tsx or layout.tsx files."
+      "passes": false,
+      "notes": "Integration and bug-fix story. Test with real Telegram/Discord bot tokens if available. Fix volume permissions, startup timing, WebSocket proxying, or any issues found."
     }
   ]
 }

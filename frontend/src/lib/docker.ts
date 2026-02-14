@@ -5,9 +5,12 @@ const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
 const MIN_PORT = 10_000;
 const MAX_PORT = 20_000;
-const CPU_LIMIT_NANO_CPUS = 500_000_000;
-const MEMORY_LIMIT_BYTES = 256 * 1024 * 1024;
+const CPU_LIMIT_NANO_CPUS = 1_000_000_000; // 1 CPU
+const MEMORY_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
 const PORT_RETRY_ATTEMPTS = 10;
+
+const OPENCLAW_IMAGE = "openclaw:local";
+const CONTAINER_GATEWAY_PORT = "18789/tcp";
 
 type DockerError = Error & {
   statusCode?: number;
@@ -16,6 +19,18 @@ type DockerError = Error & {
     message?: string;
   };
 };
+
+export interface CreateContainerOptions {
+  instanceId: string;
+  gatewayToken: string;
+  envVars?: Record<string, string>;
+}
+
+export interface CreateContainerResult {
+  containerId: string;
+  port: number;
+  gatewayToken: string;
+}
 
 function isDockerError(error: unknown): error is DockerError {
   return typeof error === "object" && error !== null;
@@ -67,14 +82,6 @@ function normalizeInstanceName(instanceId: string): string {
   return `clawdeploy-${instanceId}`;
 }
 
-function toEnv(config?: Record<string, string>): string[] | undefined {
-  if (!config || Object.keys(config).length === 0) {
-    return undefined;
-  }
-
-  return Object.entries(config).map(([key, value]) => `${key}=${value}`);
-}
-
 async function demuxLogs(stream: NodeJS.ReadableStream): Promise<string> {
   const combinedOutput = new PassThrough();
   const chunks: Buffer[] = [];
@@ -104,23 +111,50 @@ async function demuxLogs(stream: NodeJS.ReadableStream): Promise<string> {
   });
 }
 
-// Create and start a container for an instance
+/**
+ * Create and start an OpenClaw container for an instance
+ */
 export async function createContainer(
-  instanceId: string,
-  config?: Record<string, string>,
-): Promise<{ containerId: string; port: number }> {
+  options: CreateContainerOptions,
+): Promise<CreateContainerResult> {
+  const { instanceId, gatewayToken, envVars } = options;
   const containerName = normalizeInstanceName(instanceId);
-  const env = toEnv(config);
+
+  // Build environment variables
+  const env: string[] = [
+    `HOME=/home/node`,
+    `TERM=xterm-256color`,
+    `OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
+  ];
+
+  if (envVars) {
+    for (const [key, value] of Object.entries(envVars)) {
+      if (value) {
+        env.push(`${key}=${value}`);
+      }
+    }
+  }
 
   for (let attempt = 1; attempt <= PORT_RETRY_ATTEMPTS; attempt += 1) {
     const port = getRandomPort();
 
     const createOptions: ContainerCreateOptions = {
       name: containerName,
-      Image: "nginx:alpine",
+      Image: OPENCLAW_IMAGE,
+      Cmd: [
+        "node",
+        "openclaw.mjs",
+        "gateway",
+        "--bind",
+        "lan",
+        "--port",
+        "18789",
+        "--allow-unconfigured",
+      ],
       Env: env,
+      User: "node",
       ExposedPorts: {
-        "80/tcp": {},
+        [CONTAINER_GATEWAY_PORT]: {},
       },
       Labels: {
         clawdeploy: "true",
@@ -128,13 +162,18 @@ export async function createContainer(
       },
       HostConfig: {
         PortBindings: {
-          "80/tcp": [{ HostPort: String(port) }],
+          [CONTAINER_GATEWAY_PORT]: [{ HostPort: String(port) }],
         },
+        Binds: [
+          `/data/clawdeploy/${instanceId}/config:/home/node/.openclaw`,
+          `/data/clawdeploy/${instanceId}/workspace:/home/node/.openclaw/workspace`,
+        ],
         NanoCpus: CPU_LIMIT_NANO_CPUS,
         Memory: MEMORY_LIMIT_BYTES,
         RestartPolicy: {
           Name: "unless-stopped",
         },
+        Init: true,
       },
     };
 
@@ -145,6 +184,7 @@ export async function createContainer(
       return {
         containerId: container.id,
         port,
+        gatewayToken,
       };
     } catch (error: unknown) {
       if (isPortAllocationError(error) && attempt < PORT_RETRY_ATTEMPTS) {
@@ -160,6 +200,66 @@ export async function createContainer(
   throw new Error(
     `Failed to create container "${containerName}": no available port in range ${MIN_PORT}-${MAX_PORT}`,
   );
+}
+
+/**
+ * Execute a command inside a running container
+ */
+export async function execInContainer(
+  containerId: string,
+  command: string[],
+): Promise<{ exitCode: number; output: string }> {
+  const container = docker.getContainer(containerId);
+
+  const exec = await container.exec({
+    Cmd: command,
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+
+  const stream = await exec.start({ hijack: true, stdin: false });
+  const output = await demuxLogs(stream);
+  const inspectResult = await exec.inspect();
+
+  return {
+    exitCode: inspectResult.ExitCode ?? -1,
+    output,
+  };
+}
+
+/**
+ * Create an interactive exec session (for web terminal)
+ */
+export async function createInteractiveExec(
+  containerId: string,
+  cols: number = 80,
+  rows: number = 24,
+) {
+  const container = docker.getContainer(containerId);
+
+  const exec = await container.exec({
+    Cmd: ["/bin/bash"],
+    AttachStdin: true,
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: true,
+    Env: ["TERM=xterm-256color"],
+  });
+
+  const stream = await exec.start({
+    hijack: true,
+    stdin: true,
+    Tty: true,
+  });
+
+  // Resize to initial dimensions
+  try {
+    await exec.resize({ h: rows, w: cols });
+  } catch {
+    // Resize may fail if terminal isn't ready yet
+  }
+
+  return { exec, stream };
 }
 
 export async function startContainer(containerId: string): Promise<void> {
@@ -264,6 +364,25 @@ export async function getContainerLogs(
   }
 }
 
+/**
+ * Get the mapped host port for a container
+ */
+export async function getContainerPort(containerId: string): Promise<number | null> {
+  try {
+    const container = docker.getContainer(containerId);
+    const details = await container.inspect();
+
+    const portBindings = details.NetworkSettings?.Ports?.[CONTAINER_GATEWAY_PORT];
+    if (portBindings && portBindings.length > 0) {
+      return parseInt(portBindings[0].HostPort ?? "0", 10) || null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function pingDocker(): Promise<boolean> {
   try {
     await docker.ping();
@@ -272,3 +391,5 @@ export async function pingDocker(): Promise<boolean> {
     return false;
   }
 }
+
+export { docker };

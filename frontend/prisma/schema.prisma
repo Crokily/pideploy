@@ -12,13 +12,16 @@ model Instance {
   userId       String
   name         String
   model        String   @default("claude-opus-4.5")
-  channel      String   @default("telegram")
+  channel      String   @default("")
   status       String   @default("pending")
   region       String?
   instanceType String?
   botToken     String?
   apiKey       String?
+  aiProvider   String?
   containerId  String?
+  port         Int?
+  gatewayToken String?
   config       Json?    @default("{}")
   ipAddress    String?
   createdAt    DateTime @default(now())

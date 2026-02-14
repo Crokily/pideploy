@@ -2,6 +2,7 @@ import { Prisma, type Instance } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, isAuthErrorResponse } from "@/lib/auth";
 import { removeContainer } from "@/lib/docker";
+import { removeInstanceStorage } from "@/lib/instance-config";
 import { instanceIdSchema, updateInstanceSchema } from "@/lib/instance-schema";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -46,11 +47,12 @@ function tooManyRequests(retryAfter: number): NextResponse<ErrorResponse> {
   );
 }
 
-function redactInstanceSecrets(instance: Instance): Instance {
+function redactInstanceSecrets(instance: Instance, includeToken: boolean = false): Instance {
   return {
     ...instance,
     botToken: null,
     apiKey: null,
+    gatewayToken: includeToken ? instance.gatewayToken : null,
   };
 }
 
@@ -94,7 +96,8 @@ export async function GET(
       return notFound();
     }
 
-    return NextResponse.json({ instance: redactInstanceSecrets(instance) });
+    // Return gatewayToken to the owning user
+    return NextResponse.json({ instance: redactInstanceSecrets(instance, true) });
   } catch (error: unknown) {
     logger.error(
       { err: error, userId, instanceId: idResult.id },
@@ -234,6 +237,16 @@ export async function DELETE(
       }
     }
 
+    // Clean up persistent storage
+    try {
+      await removeInstanceStorage(instance.id);
+    } catch (storageError: unknown) {
+      logger.warn(
+        { err: storageError, instanceId: instance.id },
+        "Failed to remove instance storage during deletion",
+      );
+    }
+
     const result = await prisma.instance.deleteMany({
       where: {
         id: idResult.id,
@@ -243,6 +256,14 @@ export async function DELETE(
 
     if (result.count === 0) {
       return notFound();
+    }
+
+    // Update Nginx port map
+    try {
+      const { updateNginxPortMap } = await import("@/lib/nginx");
+      await updateNginxPortMap();
+    } catch (nginxError) {
+      logger.warn({ err: nginxError }, "Failed to update Nginx port map after deletion");
     }
 
     return NextResponse.json({ success: true });
