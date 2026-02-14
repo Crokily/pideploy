@@ -6,7 +6,7 @@ const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 const MIN_PORT = 10_000;
 const MAX_PORT = 20_000;
 const CPU_LIMIT_NANO_CPUS = 1_000_000_000; // 1 CPU
-const MEMORY_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
+const MEMORY_LIMIT_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB (OpenClaw gateway needs ~1.5GB)
 const PORT_RETRY_ATTEMPTS = 10;
 
 const OPENCLAW_IMAGE = "openclaw:local";
@@ -124,6 +124,7 @@ export async function createContainer(
   const env: string[] = [
     `HOME=/home/node`,
     `TERM=xterm-256color`,
+    `NODE_OPTIONS=--max-old-space-size=1536`,
     `OPENCLAW_GATEWAY_TOKEN=${gatewayToken}`,
   ];
 

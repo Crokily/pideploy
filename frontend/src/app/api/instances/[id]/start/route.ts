@@ -125,6 +125,14 @@ export async function POST(
       return notFound();
     }
 
+    // Update Nginx port map
+    try {
+      const { updateNginxPortMap } = await import("@/lib/nginx");
+      await updateNginxPortMap();
+    } catch {
+      // Non-critical
+    }
+
     return NextResponse.json({ instance: updated });
   } catch (error: unknown) {
     logger.error(
