@@ -185,7 +185,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-006 (action APIs), US-008 (dashboard cards), US-009 (detail page). Use existing Button and Modal components. Consider extracting an InstanceActions component shared between dashboard and detail page."
     },
     {

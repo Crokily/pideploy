@@ -109,3 +109,13 @@ Started: 2026-02-14
   - useParams() from next/navigation for dynamic route params
   - Logs displayed in dark monospace <pre> block with max-h-[400px]
 ---
+
+## 2026-02-14 08:35 - US-010: Add Start / Stop / Delete Action Buttons in UI
+- Created frontend/src/components/InstanceActions.tsx shared component
+- Integrated into dashboard page and instance detail page
+- Start/Stop/Delete with loading states, confirmation modal for delete
+- **Learnings for future iterations:**
+  - InstanceActions at frontend/src/components/InstanceActions.tsx
+  - Uses e.stopPropagation() to prevent Link navigation on button click
+  - Modal component from @/components/ui for delete confirmation
+---
