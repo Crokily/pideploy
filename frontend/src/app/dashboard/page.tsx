@@ -119,7 +119,7 @@ export default function DashboardPage() {
   const [isFetchingInstances, setIsFetchingInstances] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const loadInstances = useCallback(async (signal?: AbortSignal) => {
+  const fetchInstances = useCallback(async (signal?: AbortSignal) => {
     setIsFetchingInstances(true);
     setErrorMessage("");
 
@@ -173,16 +173,21 @@ export default function DashboardPage() {
     }
 
     const controller = new AbortController();
-    void loadInstances(controller.signal);
+    void fetchInstances(controller.signal);
+
+    const intervalId = window.setInterval(() => {
+      void fetchInstances();
+    }, 30_000);
 
     return () => {
       controller.abort();
+      window.clearInterval(intervalId);
     };
-  }, [isLoaded, isSignedIn, loadInstances]);
+  }, [isLoaded, isSignedIn, fetchInstances]);
 
   const handleStatusChange = useCallback(() => {
-    void loadInstances();
-  }, [loadInstances]);
+    void fetchInstances();
+  }, [fetchInstances]);
 
   if (!isLoaded) {
     return (
