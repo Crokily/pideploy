@@ -202,7 +202,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-004 (Docker service) and US-008 (dynamic dashboard). The admin/sync endpoint can be called by an external cron or manually. The client-side polling is a simpler mechanism for keeping the UI fresh."
     },
     {

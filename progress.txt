@@ -119,3 +119,13 @@ Started: 2026-02-14
   - Uses e.stopPropagation() to prevent Link navigation on button click
   - Modal component from @/components/ui for delete confirmation
 ---
+
+## 2026-02-14 08:40 - US-011: Instance State Sync (Container Status Polling)
+- Created frontend/src/lib/state-sync.ts with syncInstanceStates()
+- Created POST /api/admin/sync endpoint (X-Sync-Secret auth)
+- Dashboard polls every 30s
+- **Learnings for future iterations:**
+  - state-sync.ts at frontend/src/lib/state-sync.ts
+  - Admin sync: POST /api/admin/sync with X-Sync-Secret header
+  - SYNC_SECRET=clawdeploy-sync-2026 in .env.local
+---
