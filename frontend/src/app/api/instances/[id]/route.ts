@@ -1,6 +1,7 @@
 import { Prisma, type Instance } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, isAuthErrorResponse } from "@/lib/auth";
+import { removeContainer } from "@/lib/docker";
 import { instanceIdSchema, updateInstanceSchema } from "@/lib/instance-schema";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -184,6 +185,33 @@ export async function DELETE(
   }
 
   try {
+    const instance = await prisma.instance.findFirst({
+      where: {
+        id: idResult.id,
+        userId,
+      },
+    });
+
+    if (!instance) {
+      return notFound();
+    }
+
+    if (instance.containerId) {
+      try {
+        await removeContainer(instance.containerId);
+      } catch (dockerError: unknown) {
+        logger.warn(
+          {
+            err: dockerError,
+            userId,
+            instanceId: instance.id,
+            containerId: instance.containerId,
+          },
+          "Failed to remove Docker container during instance deletion",
+        );
+      }
+    }
+
     const result = await prisma.instance.deleteMany({
       where: {
         id: idResult.id,

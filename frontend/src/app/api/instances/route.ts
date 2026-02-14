@@ -1,6 +1,7 @@
 import type { Instance } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, isAuthErrorResponse } from "@/lib/auth";
+import { createContainer } from "@/lib/docker";
 import { createInstanceSchema } from "@/lib/instance-schema";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
@@ -88,11 +89,37 @@ export async function POST(
         region: parsed.data.region,
         instanceType: parsed.data.instanceType,
         userId,
-        status: "pending",
+        status: "creating",
       },
     });
 
-    return NextResponse.json({ instance }, { status: 201 });
+    let finalInstance = instance;
+
+    try {
+      const { containerId } = await createContainer(instance.id);
+
+      finalInstance = await prisma.instance.update({
+        where: { id: instance.id },
+        data: {
+          containerId,
+          status: "running",
+        },
+      });
+    } catch (dockerError: unknown) {
+      logger.error(
+        { err: dockerError, userId, instanceId: instance.id },
+        "Failed to create Docker container for instance",
+      );
+
+      finalInstance = await prisma.instance.update({
+        where: { id: instance.id },
+        data: {
+          status: "error",
+        },
+      });
+    }
+
+    return NextResponse.json({ instance: finalInstance }, { status: 201 });
   } catch (error: unknown) {
     logger.error({ err: error, userId }, "Failed to create instance");
     return internalServerError();
