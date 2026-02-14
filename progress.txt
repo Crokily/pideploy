@@ -58,3 +58,12 @@ Started: 2026-02-14
   - Container names: clawdeploy-{instanceId}
   - Labels: clawdeploy=true, instanceId=X
 ---
+
+## 2026-02-14 08:05 - US-005: Integrate Docker with Instance Creation and Deletion APIs
+- POST /api/instances now creates Docker container after DB insert
+- DELETE /api/instances/[id] now removes container before DB delete
+- Added serverExternalPackages: ["dockerode", "ssh2"] to next.config.ts
+- **Learnings for future iterations:**
+  - next.config.ts needs serverExternalPackages for dockerode to work in API routes
+  - Docker operations wrapped in try/catch so DB ops continue even if Docker fails
+---

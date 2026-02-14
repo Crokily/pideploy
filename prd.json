@@ -90,7 +90,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-004. Import functions from frontend/src/lib/docker.ts. Wrap Docker operations in try/catch so DB operations are not blocked by Docker failures."
     },
     {
