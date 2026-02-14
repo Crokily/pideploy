@@ -1,0 +1,29 @@
+## Codebase Patterns
+- Frontend: Next.js 16.1.6 with App Router at frontend/
+- Auth: Clerk with @clerk/nextjs, middleware at src/proxy.ts
+- DB: Prisma 6.19.2 + Neon PostgreSQL, schema at frontend/prisma/schema.prisma
+- Validation: Zod schemas in frontend/src/lib/instance-schema.ts
+- Logging: Pino logger in frontend/src/lib/logger.ts
+- Auth helper: frontend/src/lib/auth.ts with requireAuth() and isAuthErrorResponse()
+- API routes: Next.js App Router at frontend/src/app/api/
+- UI components: frontend/src/components/ui/ (Button, Card, Input, Select, Badge, LoadingSpinner, Modal, EmptyState)
+- Layout: frontend/src/components/layout/ (DashboardLayout with Navbar + Sidebar + Clerk UserButton)
+- Quality checks: cd frontend && npx tsc --noEmit && npm run lint && npm run build
+- Prisma commands: cd frontend && npx prisma db push && npx prisma generate
+- Port 3000 is occupied (Next.js dev), use port 8888 for any standalone service
+- Git user: crokily <crokily@gmail.com>
+---
+
+# Ralph Progress Log
+Started: 2026-02-14
+---
+
+## 2026-02-14 07:45 - US-001: Update Prisma Schema with OpenClaw Instance Fields
+- Updated frontend/prisma/schema.prisma with model, channel, botToken, apiKey, containerId, config fields
+- Made region and instanceType optional for backward compatibility
+- Ran prisma db push and prisma generate successfully
+- **Learnings for future iterations:**
+  - DATABASE_URL is in frontend/.env.local but also in backend/.env
+  - Prisma generate updates the client types automatically
+  - Json fields need @default("{}") not @default({})
+---

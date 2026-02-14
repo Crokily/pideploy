@@ -1,0 +1,260 @@
+{
+  "project": "ClawDeploy",
+  "branchName": "ralph/stages-3-5",
+  "description": "Docker container management, frontend-backend integration, and production polish for the ClawDeploy OpenClaw one-click deployment SaaS platform.",
+  "qualityChecks": {
+    "typecheck": "cd frontend && npx tsc --noEmit",
+    "lint": "cd frontend && npm run lint",
+    "build": "cd frontend && npm run build"
+  },
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Update Prisma Schema with OpenClaw Instance Fields",
+      "description": "As a developer, I need the database schema to include all fields required for OpenClaw deployments (model, channel, botToken, apiKey, containerId, config) so that the API can store complete instance configuration.",
+      "acceptanceCriteria": [
+        "Prisma schema Instance model updated: added model (String), channel (String), botToken (String, optional), apiKey (String, optional), containerId (String, optional), config (Json, optional, default {})",
+        "Existing region and instanceType fields changed to optional for backward compatibility",
+        "status field allows values: pending, creating, running, stopped, error, deleted",
+        "npx prisma db push succeeds against Neon database",
+        "npx prisma generate succeeds",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "This is the foundation \u2014 all subsequent stories depend on the updated schema. Reference backend/schema.sql for the intended field set. Use prisma db push, not SQL migrations."
+    },
+    {
+      "id": "US-002",
+      "title": "Update Zod Validation Schemas and CRUD API Routes",
+      "description": "As a developer, I need the Zod validation schemas and existing API route handlers to accept and validate the new instance fields so that the API can create and update instances with full configuration.",
+      "acceptanceCriteria": [
+        "createInstanceSchema requires name, model (enum: claude-opus-4.5, gpt-5.2, gemini-3-flash), channel (enum: telegram, discord, whatsapp); optional botToken, apiKey, region, instanceType",
+        "updateInstanceSchema allows patching name, status, botToken, apiKey, config",
+        "instanceStatusSchema includes creating and deleted values",
+        "POST /api/instances route creates instances with new fields",
+        "PATCH /api/instances/[id] route updates instances with new fields",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Lint passes: cd frontend && npm run lint",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Depends on US-001. Update frontend/src/lib/instance-schema.ts and both route files. Keep the existing auth middleware and error handling patterns."
+    },
+    {
+      "id": "US-003",
+      "title": "Install Docker Engine on the Server",
+      "description": "As a developer, I need Docker Engine installed and running on the Ubuntu server so that the application can manage containers programmatically.",
+      "acceptanceCriteria": [
+        "Shell script scripts/install-docker.sh created that installs Docker Engine on Ubuntu via official Docker apt repo",
+        "Script is idempotent (safe to run twice)",
+        "Docker daemon is running: docker info succeeds",
+        "Current user can run Docker without sudo (added to docker group)",
+        "docker run --rm hello-world succeeds",
+        "Script committed to the repo"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Docker is NOT currently installed on the server. This story has no frontend code changes so typecheck/build are not required. Run the script after creating it to actually install Docker."
+    },
+    {
+      "id": "US-004",
+      "title": "Create Docker Service Module",
+      "description": "As a developer, I need a Docker service module that wraps container operations (create, start, stop, remove, status, logs) so that API routes can manage containers through a clean interface.",
+      "acceptanceCriteria": [
+        "dockerode npm package added to frontend dependencies",
+        "@types/dockerode added as devDependency",
+        "frontend/src/lib/docker.ts created with exported async functions: createContainer(options), startContainer(containerId), stopContainer(containerId), removeContainer(containerId), getContainerStatus(containerId), getContainerLogs(containerId, tail?)",
+        "createContainer uses nginx:alpine image, maps a dynamic host port (range 10000-20000) to container port 80, sets CPU limits (NanoCpus: 500000000 = 0.5 CPU) and memory limit (256MB), enables auto-restart (unless-stopped)",
+        "Container names follow pattern clawdeploy-{instanceId}",
+        "All functions include proper error handling with typed error responses",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Depends on US-003 (Docker must be installed). The module connects to the local Docker socket at /var/run/docker.sock. Pull nginx:alpine image first if not present."
+    },
+    {
+      "id": "US-005",
+      "title": "Integrate Docker with Instance Creation and Deletion APIs",
+      "description": "As a developer, I need the POST /api/instances route to create a Docker container and the DELETE /api/instances/[id] route to remove it, so that instance lifecycle is synchronized with containers.",
+      "acceptanceCriteria": [
+        "POST /api/instances: after DB insert, calls createContainer(), updates instance with containerId and status creating, then calls startContainer() and updates status to running",
+        "If container creation fails, instance status is set to error and error is logged",
+        "DELETE /api/instances/[id]: stops and removes the Docker container (if containerId exists) before deleting the DB record",
+        "If container removal fails (e.g. container already gone), deletion continues gracefully",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Depends on US-004. Import functions from frontend/src/lib/docker.ts. Wrap Docker operations in try/catch so DB operations are not blocked by Docker failures."
+    },
+    {
+      "id": "US-006",
+      "title": "Add Container Action API Endpoints (Start / Stop / Logs)",
+      "description": "As a user, I want API endpoints to start, stop, and view logs for my instances so that I can control their lifecycle remotely.",
+      "acceptanceCriteria": [
+        "POST /api/instances/[id]/start \u2014 starts container via Docker service, updates DB status to running, returns updated instance",
+        "POST /api/instances/[id]/stop \u2014 stops container via Docker service, updates DB status to stopped, returns updated instance",
+        "GET /api/instances/[id]/logs \u2014 returns last 100 lines of container logs as { logs: string }; accepts optional ?tail=N query param",
+        "All three endpoints require Clerk auth and verify instance ownership (userId match)",
+        "Returns 404 if instance not found or not owned by user",
+        "Returns 400 if instance has no containerId",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Lint passes: cd frontend && npm run lint",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Depends on US-004 and US-005. Create three new route files: frontend/src/app/api/instances/[id]/start/route.ts, stop/route.ts, logs/route.ts. Follow the same auth pattern as existing [id]/route.ts."
+    },
+    {
+      "id": "US-007",
+      "title": "Create Instance Creation Page (/dashboard/new)",
+      "description": "As a user, I want a form at /dashboard/new to create a new OpenClaw instance by selecting a model, channel, and providing my API credentials, so that I can deploy with a few clicks.",
+      "acceptanceCriteria": [
+        "New page at frontend/src/app/dashboard/new/page.tsx using DashboardLayout",
+        "Form fields: Instance Name (text input, required), Model (select: Claude Opus 4.5 / GPT-5.2 / Gemini 3 Flash), Channel (select: Telegram / Discord / WhatsApp), Bot Token (password input, optional), API Key (password input, optional)",
+        "Form validates client-side before submission (name required, model required, channel required)",
+        "On submit: POST to /api/instances with form data, show loading spinner on button",
+        "On success: redirect to /dashboard",
+        "On error: show error message inline below the form",
+        "Cancel button navigates back to /dashboard",
+        "Page protected by Clerk auth (redirect to / if unauthenticated)",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Depends on US-002 (API must accept new fields). This is a client component ('use client') since it has form state and event handlers. Use existing UI components: Input, Select, Button, Card from @/components/ui."
+    },
+    {
+      "id": "US-008",
+      "title": "Make Dashboard Page Dynamic with Real Instance Data",
+      "description": "As a user, I want the dashboard to show my actual deployed instances with real status information, so that I can monitor my deployments at a glance.",
+      "acceptanceCriteria": [
+        "Dashboard page fetches instances from GET /api/instances on load",
+        "Each instance displayed as a Card showing: name, model, channel, status badge (color-coded: green=running, yellow=pending/creating, red=error, gray=stopped), and creation date",
+        "EmptyState shown when user has zero instances, with Create New Instance button linking to /dashboard/new",
+        "If fetch fails, an error message is displayed",
+        "Instance cards link to /dashboard/instances/[id]",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Depends on US-002 (API returns new fields). Replace the current static dashboard content. Can be a client component with useEffect + useState, or a server component with direct fetch. Badge component already supports variants: success, warning, danger, info."
+    },
+    {
+      "id": "US-009",
+      "title": "Create Instance Detail Page (/dashboard/instances/[id])",
+      "description": "As a user, I want a detail page for each instance showing its full configuration, live status, and recent logs, so that I can monitor and troubleshoot deployments.",
+      "acceptanceCriteria": [
+        "New page at frontend/src/app/dashboard/instances/[id]/page.tsx using DashboardLayout",
+        "Fetches instance data from GET /api/instances/[id]",
+        "Displays: instance name, model, channel, status badge, containerId (truncated), creation date, last updated date",
+        "Displays container logs in a scrollable monospace <pre> block, fetched from GET /api/instances/[id]/logs",
+        "Shows Instance not found message if 404 returned",
+        "Back to Dashboard link at top",
+        "Page protected by Clerk auth",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Depends on US-006 (logs API) and US-008 (cards link here). Use existing Card, Badge components. Logs section can be a client component that fetches on mount."
+    },
+    {
+      "id": "US-010",
+      "title": "Add Start / Stop / Delete Action Buttons in UI",
+      "description": "As a user, I want buttons to start, stop, and delete my instances from both the dashboard cards and the detail page, so that I can control deployments without using the terminal.",
+      "acceptanceCriteria": [
+        "Each instance card on the dashboard includes inline action buttons for Start, Stop, Delete",
+        "Instance detail page has prominent Start, Stop, Delete buttons in a toolbar area",
+        "Start button calls POST /api/instances/[id]/start, disabled when status is running",
+        "Stop button calls POST /api/instances/[id]/stop, disabled when status is stopped",
+        "Delete button shows a confirmation Modal dialog before calling DELETE /api/instances/[id]; on success redirects to /dashboard",
+        "Buttons show loading state during API call",
+        "On success, instance data is refreshed to show new status",
+        "On error, inline error message displayed",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Depends on US-006 (action APIs), US-008 (dashboard cards), US-009 (detail page). Use existing Button and Modal components. Consider extracting an InstanceActions component shared between dashboard and detail page."
+    },
+    {
+      "id": "US-011",
+      "title": "Instance State Sync (Container Status Polling)",
+      "description": "As a developer, I need a mechanism to periodically sync Docker container state to the database so that the dashboard always reflects reality, even if containers crash or stop externally.",
+      "acceptanceCriteria": [
+        "New file frontend/src/lib/state-sync.ts with a syncInstanceStates() function that: queries all instances with status running or creating, checks each container actual status via Docker service, updates DB if status has diverged",
+        "New API route POST /api/admin/sync (protected with a secret header X-Sync-Secret matching env SYNC_SECRET) that runs the sync",
+        "If a container is not found (removed externally), instance status is set to error",
+        "Sync function logs each status change via Pino logger",
+        "Dashboard page polls GET /api/instances every 30 seconds to refresh instance list (client-side setInterval)",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Depends on US-004 (Docker service) and US-008 (dynamic dashboard). The admin/sync endpoint can be called by an external cron or manually. The client-side polling is a simpler mechanism for keeping the UI fresh."
+    },
+    {
+      "id": "US-012",
+      "title": "Loading States and Error Boundaries",
+      "description": "As a user, I want to see appropriate loading indicators and friendly error messages so that the app feels polished and I know what's happening.",
+      "acceptanceCriteria": [
+        "Next.js loading.tsx added to /dashboard route segment \u2014 displays LoadingSpinner centered in DashboardLayout",
+        "Next.js error.tsx boundary added to /dashboard route segment \u2014 displays a user-friendly error card with a Try Again button (must be a client component with 'use client')",
+        "Dashboard page shows LoadingSpinner while instances are being fetched",
+        "Instance detail page shows LoadingSpinner while data loads",
+        "All API-calling components handle and display error states (not silent failures)",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Depends on US-008, US-009. Use existing LoadingSpinner and Card components. error.tsx must use 'use client' directive and accept error and reset props."
+    },
+    {
+      "id": "US-013",
+      "title": "Rate Limiting, Security Hardening, and Health Check",
+      "description": "As a developer, I need rate limiting on API routes, secure handling of sensitive data, and a health check endpoint for monitoring, so that the platform is production-ready.",
+      "acceptanceCriteria": [
+        "Simple in-memory rate limiter in frontend/src/lib/rate-limit.ts using a Map with sliding window (60 requests/minute per userId)",
+        "Rate limiter applied to POST /api/instances, DELETE /api/instances/[id], POST /api/instances/[id]/start, POST /api/instances/[id]/stop; returns 429 with { error: 'Too many requests' } when exceeded",
+        "Bot tokens and API keys are never returned in API GET responses \u2014 redacted to '***' or omitted in GET /api/instances and GET /api/instances/[id]",
+        "GET /api/health endpoint returns { status: 'ok', timestamp: ISO string, docker: 'connected' | 'disconnected' } \u2014 no auth required",
+        "Health check verifies Docker daemon connectivity via dockerode ping",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Lint passes: cd frontend && npm run lint",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Depends on US-005, US-006. Rate limiter uses in-memory Map \u2014 acceptable for single-server deployment. Cleanup stale entries periodically to prevent memory leaks."
+    },
+    {
+      "id": "US-014",
+      "title": "SEO Meta Tags, README, and API Documentation",
+      "description": "As a developer and product owner, I need proper SEO on public pages, an updated README, and API documentation so that the project is presentable and maintainable.",
+      "acceptanceCriteria": [
+        "Landing page (/) has proper <title>, <meta name='description'>, and Open Graph tags via Next.js metadata export",
+        "Dashboard pages have appropriate <title> tags (e.g. 'Dashboard | ClawDeploy', 'New Instance | ClawDeploy')",
+        "README.md at repo root updated with: project overview, tech stack, prerequisites (Node 22+, Docker), setup instructions (env vars, prisma db push, npm run dev), API endpoint reference table, architecture overview",
+        "docs/api.md created with full API documentation: all endpoints, request/response examples, auth requirements, error codes",
+        "TypeScript check passes: cd frontend && npx tsc --noEmit",
+        "Build passes: cd frontend && npm run build"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "This is the final polish story. Minimal code changes \u2014 mostly metadata exports and markdown files. For Next.js metadata, export const metadata from page.tsx or layout.tsx files."
+    }
+  ]
+}
