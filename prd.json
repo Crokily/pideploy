@@ -237,7 +237,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-005, US-006. Rate limiter uses in-memory Map \u2014 acceptable for single-server deployment. Cleanup stale entries periodically to prevent memory leaks."
     },
     {

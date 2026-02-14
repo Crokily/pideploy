@@ -135,3 +135,14 @@ Started: 2026-02-14
 - Error boundary is 'use client' with error/reset props
 - All pages already had loading/error states from previous stories
 ---
+
+## 2026-02-14 08:50 - US-013: Rate Limiting, Security Hardening, and Health Check
+- Created rate-limit.ts with sliding window (60 req/min/user)
+- Applied to POST/DELETE mutation endpoints
+- Redacted botToken/apiKey in GET responses
+- Created /api/health endpoint with Docker ping
+- **Learnings for future iterations:**
+  - Rate limiter at frontend/src/lib/rate-limit.ts
+  - Health check at /api/health (no auth)
+  - Sensitive fields nulled in GET responses
+---
