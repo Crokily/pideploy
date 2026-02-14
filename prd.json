@@ -253,7 +253,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "This is the final polish story. Minimal code changes \u2014 mostly metadata exports and markdown files. For Next.js metadata, export const metadata from page.tsx or layout.tsx files."
     }
   ]

@@ -146,3 +146,15 @@ Started: 2026-02-14
   - Health check at /api/health (no auth)
   - Sensitive fields nulled in GET responses
 ---
+
+## 2026-02-14 08:55 - US-014: SEO Meta Tags, README, and API Documentation
+- Updated layout.tsx with full SEO metadata and Open Graph tags
+- Created dashboard/layout.tsx and dashboard/new/layout.tsx for page-specific titles
+- Rewrote README.md with comprehensive project docs
+- Created docs/api.md with full API reference
+- **Learnings for future iterations:**
+  - Next.js metadata template: "%s | ClawDeploy" in root layout
+  - Client components can't export metadata, use route-level layout.tsx instead
+---
+
+## 🎉 ALL STORIES COMPLETE — ClawDeploy Stages 3-5 Development Finished!
