@@ -129,3 +129,9 @@ Started: 2026-02-14
   - Admin sync: POST /api/admin/sync with X-Sync-Secret header
   - SYNC_SECRET=clawdeploy-sync-2026 in .env.local
 ---
+
+## 2026-02-14 08:45 - US-012: Loading States and Error Boundaries
+- Created dashboard/loading.tsx and dashboard/error.tsx
+- Error boundary is 'use client' with error/reset props
+- All pages already had loading/error states from previous stories
+---

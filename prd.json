@@ -219,7 +219,7 @@
         "Build passes: cd frontend && npm run build"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-008, US-009. Use existing LoadingSpinner and Card components. error.tsx must use 'use client' directive and accept error and reset props."
     },
     {
