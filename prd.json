@@ -193,7 +193,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "These are the Pattern 7 (alerting) and Pattern 9 (eval) from observability.md. Alert actions write to file for now (can be upgraded to Discord/webhook later). Eval dataset is checked programmatically, not run against live LLM in this story."
     },
     {

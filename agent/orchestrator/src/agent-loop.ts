@@ -6,7 +6,7 @@ import {
   type AgentTool,
 } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
-import { getConfiguredModel, LOOP_LIMITS, COST_LIMITS } from "./config.js";
+import { getApiKeyForProvider, getConfiguredModel, LOOP_LIMITS, COST_LIMITS } from "./config.js";
 import { TASK_PROMPT, HEARTBEAT_PROMPT } from "./prompt.js";
 import { allTools } from "./tools/index.js";
 import { bashTool } from "./tools/bash.js";
@@ -67,6 +67,7 @@ export async function executeTask(task: TaskInput): Promise<ExecutionResult> {
   const config: AgentLoopConfig = {
     model,
     convertToLlm,
+    getApiKey: (provider: string) => getApiKeyForProvider(provider),
   };
 
   const controller = new AbortController();
@@ -161,6 +162,7 @@ export async function executeHeartbeat(): Promise<ExecutionResult> {
   const config: AgentLoopConfig = {
     model,
     convertToLlm,
+    getApiKey: (provider: string) => getApiKeyForProvider(provider),
   };
 
   const controller = new AbortController();

@@ -1,4 +1,9 @@
-import { getModel, type Api, type KnownProvider, type Model } from "@mariozechner/pi-ai";
+import {
+  getModel,
+  type Api,
+  type KnownProvider,
+  type Model,
+} from "@mariozechner/pi-ai";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -46,10 +51,38 @@ export function loadAuth(): Record<string, any> {
   }
 }
 
+export function getApiKeyForProvider(provider: string): string | undefined {
+  try {
+    const auth = loadAuth();
+    const entry = auth[provider];
+    if (!entry) {
+      return undefined;
+    }
+
+    if (entry.type === "api_key" && entry.key) {
+      return entry.key;
+    }
+    if (entry.type === "oauth" && entry.access) {
+      return entry.access;
+    }
+    if (entry.access) {
+      return entry.access;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function getConfiguredModel(): Model<Api> {
   for (const { provider, model } of MODEL_CHAIN) {
     try {
       const m = resolveModel(provider, model);
+      const key = getApiKeyForProvider(provider);
+      if (!key) {
+        logger.warn({ provider, model }, "Model unavailable, missing credentials");
+        continue;
+      }
       logger.info({ provider, model }, "Using model");
       return m;
     } catch (err) {

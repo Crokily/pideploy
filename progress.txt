@@ -83,3 +83,8 @@
 - index.ts now runs both task queue and heartbeat concurrently
 - Graceful shutdown with prisma.$disconnect()
 ---
+## 2026-02-21 14:35 UTC - US-010: Production Alerting + Eval Dataset
+- 4 alert rules wired into agent-loop finalize
+- 5 eval cases covering create, failure recovery, heartbeat, delete
+- evaluateAgentRun checks: completion, expected_tools, cost, no_loops
+---
