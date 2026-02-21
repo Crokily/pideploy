@@ -123,12 +123,17 @@ export async function executeTask(task: TaskInput): Promise<ExecutionResult> {
   await tracer.save();
   await transcript.save(trace.traceId);
 
+  const reportedSuccess = reportData?.details?.success;
+  const finalSuccess = typeof reportedSuccess === "boolean" ? reportedSuccess : trace.success;
+
   const metrics = perfTracker.getMetrics();
   logger.info(
     {
       traceId: trace.traceId,
       taskType: task.type,
-      success: trace.success,
+      success: finalSuccess,
+      traceSuccess: trace.success,
+      reportedSuccess,
       cost: trace.totalCost,
       turns: turnCount,
       durationMs: metrics.totalDurationMs,
@@ -139,12 +144,12 @@ export async function executeTask(task: TaskInput): Promise<ExecutionResult> {
   await evaluateAlerts(trace);
 
   return {
-    success: trace.success,
+    success: finalSuccess,
     traceId: trace.traceId,
     cost: trace.totalCost,
     turns: turnCount,
     reportData,
-    error: trace.error,
+    error: finalSuccess ? undefined : trace.error,
   };
 }
 
