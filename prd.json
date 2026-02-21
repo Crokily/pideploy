@@ -210,7 +210,7 @@
         "agent/orchestrator/scripts/start.sh created for running the service"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "The integration test is manual: start the service, insert a task via psql or prisma studio, watch it get processed. Check that trace file is generated. This story also ensures all modules compose correctly in the real entry point."
     },
     {

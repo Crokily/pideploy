@@ -88,3 +88,14 @@
 - 5 eval cases covering create, failure recovery, heartbeat, delete
 - evaluateAgentRun checks: completion, expected_tools, cost, no_loops
 ---
+## Codebase Patterns
+- pi-ai auth: read auth.json manually, pass key via getApiKey callback in AgentLoopConfig
+- opencode provider uses type=api_key with key field; google/anthropic use OAuth with access field
+- AgentLoopConfig.getApiKey is called per-turn by pi-agent-core to resolve dynamic keys
+
+## 2026-02-21 14:38 UTC - US-011: Orchestrator Integration Test
+- Auth fix: getApiKeyForProvider() resolves keys from ~/.pi/agent/auth.json
+- Smoke test: service starts with minimax-m2.5-free, stays alive, clean shutdown
+- Task table pushed to Neon DB via prisma db push
+- **Critical learning:** pi-ai getModel() doesn't load auth — must pass API key via options
+---
