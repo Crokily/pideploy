@@ -103,7 +103,13 @@ export function createTracer(opts: {
               outputTokens: usage?.output,
               cacheReadTokens: usage?.cacheRead,
               cost: usage?.cost?.total,
+              errorMessage: (msg as any).errorMessage,
             };
+          }
+
+          if (msg.stopReason === "error") {
+            trace.success = false;
+            trace.error = (msg as any).errorMessage ?? "Assistant generation failed";
           }
         }
         break;

@@ -37,8 +37,8 @@ export const LOOP_LIMITS = {
   maxTurnsPerTask: 20,
   maxTurnsPerHeartbeat: 10,
   taskTimeoutMs: 5 * 60 * 1000, // 5 minutes
-  heartbeatIntervalMs: 60 * 1000, // 60 seconds
-  taskPollIntervalMs: 2 * 1000 // 2 seconds
+  heartbeatIntervalMs: 5 * 60 * 1000, // 5 minutes (avoid rate limits on free models)
+  taskPollIntervalMs: 5 * 1000 // 5 seconds
 };
 
 export function loadAuth(): Record<string, any> {
@@ -59,16 +59,21 @@ export function getApiKeyForProvider(provider: string): string | undefined {
       return undefined;
     }
 
+    let key: string | undefined;
     if (entry.type === "api_key" && entry.key) {
-      return entry.key;
+      key = entry.key;
+    } else if (entry.type === "oauth" && entry.access) {
+      key = entry.access;
+    } else if (entry.access) {
+      key = entry.access;
     }
-    if (entry.type === "oauth" && entry.access) {
-      return entry.access;
+
+    // Also set the env var so pi-ai's internal getEnvApiKey() can find it
+    if (key && provider === "opencode") {
+      process.env.OPENCODE_API_KEY = key;
     }
-    if (entry.access) {
-      return entry.access;
-    }
-    return undefined;
+
+    return key;
   } catch {
     return undefined;
   }

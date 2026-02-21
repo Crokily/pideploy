@@ -84,10 +84,15 @@ export async function executeTask(task: TaskInput): Promise<ExecutionResult> {
 
   try {
     for await (const event of agentLoop([userMessage], context, config, controller.signal)) {
-      tracer.processEvent(event);
-      costMonitor.processEvent(event);
-      perfTracker.processEvent(event);
-      transcript.processEvent(event);
+      // Observability must never crash the agent loop
+      try {
+        tracer.processEvent(event);
+        costMonitor.processEvent(event);
+        perfTracker.processEvent(event);
+        transcript.processEvent(event);
+      } catch (obsErr: any) {
+        logger.warn({ err: obsErr.message, eventType: event.type }, "Observability event error (non-fatal)");
+      }
 
       if (event.type === "turn_start") {
         turnCount++;
@@ -179,9 +184,13 @@ export async function executeHeartbeat(): Promise<ExecutionResult> {
 
   try {
     for await (const event of agentLoop([userMessage], context, config, controller.signal)) {
-      tracer.processEvent(event);
-      costMonitor.processEvent(event);
-      perfTracker.processEvent(event);
+      try {
+        tracer.processEvent(event);
+        costMonitor.processEvent(event);
+        perfTracker.processEvent(event);
+      } catch (obsErr: any) {
+        logger.warn({ err: obsErr.message, eventType: event.type }, "Observability event error (non-fatal)");
+      }
 
       if (event.type === "turn_start") {
         turnCount++;

@@ -32,7 +32,9 @@ export function createTranscriptCapture(): TranscriptCapture {
       case "message_end":
         entry.data = {
           role: event.message?.role,
-          contentTypes: event.message?.content?.map((c: any) => c.type),
+          contentTypes: Array.isArray(event.message?.content)
+            ? event.message.content.map((c: any) => c.type)
+            : typeof event.message?.content,
           model: event.message?.model,
           usage: event.message?.usage,
           stopReason: event.message?.stopReason,
