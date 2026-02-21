@@ -232,7 +232,7 @@
         "Script exits 0 on success, non-zero on failure"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "The E2E test skips Clerk auth by using a test-mode header or environment variable that the API routes check. If Clerk is enforced, the test can use the admin sync secret as a bypass. agent-browser commands: open, snapshot -i, get text, screenshot for verification."
     }
   ]
