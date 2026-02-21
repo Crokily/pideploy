@@ -156,7 +156,7 @@
         "cd agent/orchestrator && npx tsc --noEmit passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Task queue uses simple Prisma queries: findFirst where status=pending ordered by createdAt, update to processing. On completion, update to completed/failed with result/error. The frontend returns 202 Accepted since the actual work happens async. Frontend polling on GET /api/instances will show updated status as agent completes work."
     },
     {
