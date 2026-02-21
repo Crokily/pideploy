@@ -4,3 +4,14 @@
 
 # piDeploy Agent Orchestrator — Development Progress
 
+## 2026-02-21 13:35 UTC - US-001: Monorepo Setup — Rename and Restructure
+- Renamed clawdeploy → piDeploy
+- Created monorepo: original/ (read-only) + agent/ (active dev)
+- Copied frontend to agent/frontend/, verified npm install + typecheck
+- Created agent/orchestrator/src/ placeholder
+- Updated README.md
+- **Learnings for future iterations:**
+  - /data/clawdeploy/ path is hardcoded in docker.ts and instance-config.ts — keep it unchanged
+  - agent/frontend has its own node_modules, independent from original
+  - .git history preserved, branch is ralph/openclaw-real-deployment
+---

@@ -25,8 +25,8 @@
         "cd piDeploy/agent/frontend && npx tsc --noEmit passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Do NOT modify any original code. agent/frontend is a verbatim copy initially. The /data/clawdeploy path stays as-is since containers mount from there."
+      "passes": true,
+      "notes": "Completed. Monorepo structure verified. agent/frontend typecheck passes."
     },
     {
       "id": "US-002",
