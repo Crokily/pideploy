@@ -34,3 +34,12 @@
   - agent_start event may not have all fields — use optional chaining
   - Cost tracking depends on usage.cost.total being present in message events
 ---
+## 2026-02-21 14:06 UTC - US-004: Core Lifecycle Tools — create, start, stop
+- Copied docker.ts, instance-config.ts, nginx.ts from frontend to orchestrator/src/lib/
+- Created 3 tools + index.ts
+- Ownership validation in all tools: query prisma for instance where userId matches
+- **Learnings for future iterations:**
+  - pi-agent-core Tool interface is simpler than Layer 3 ToolDefinition: execute(args) → { content, details }
+  - Import path adaptation: @/lib/* → ./xxx.js (relative ESM)
+  - nginx.ts needed prisma and logger import path updates
+---

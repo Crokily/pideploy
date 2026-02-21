@@ -82,7 +82,7 @@
         "npx tsc --noEmit passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Copy the core library files (docker.ts, instance-config.ts, nginx.ts, prisma.ts, logger.ts) from agent/frontend/src/lib/ to agent/orchestrator/src/lib/ and adapt imports. The tool execute() function signature follows pi-coding-agent ToolDefinition: execute(toolCallId, params, signal, onUpdate, ctx)."
     },
     {
