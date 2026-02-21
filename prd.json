@@ -44,8 +44,8 @@
         "npx tsc --noEmit in agent/orchestrator/ passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "The Prisma client is generated in agent/frontend/. Orchestrator imports it via relative path: import { PrismaClient } from '../../frontend/node_modules/.prisma/client' or via a symlink. Use tsx for running TS directly during dev."
+      "passes": true,
+      "notes": "Completed by codex. npm install + tsc --noEmit pass."
     },
     {
       "id": "US-003",

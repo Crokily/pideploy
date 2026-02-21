@@ -15,3 +15,13 @@
   - agent/frontend has its own node_modules, independent from original
   - .git history preserved, branch is ralph/openclaw-real-deployment
 ---
+## 2026-02-21 13:42 UTC - US-002: Orchestrator Project Scaffolding
+- Created package.json, tsconfig.json, src/index.ts, src/config.ts, src/lib/logger.ts, src/lib/prisma.ts
+- Prisma schema symlinked from frontend
+- Model fallback: minimax-m2.5-free → glm-5-free → gemini-3-flash
+- Codex used `resolveModel` wrapper to handle pi-ai getModel type constraints
+- **Learnings for future iterations:**
+  - pi-ai getModel has strict KnownProvider type — may need cast for custom providers
+  - Prisma generate needs DATABASE_URL in env or it skips — postinstall handles this
+  - ESM requires .js extensions in all relative imports
+---
