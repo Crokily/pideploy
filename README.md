@@ -21,16 +21,11 @@ piDeploy/
 │   │       ├── heartbeat.ts    # 60s autonomous health check loop
 │   │       ├── task-queue.ts   # DB-based task queue consumer
 │   │       └── agent-loop.ts   # Core agentLoop() integration
-│   ├── AGENT_ARCHITECTURE_REVIEW.md  # Postmortem/reality-check report
 │   └── scripts/           # E2E tests, setup scripts
 │
 ├── prd.json               # Ralph loop PRD (development tracking)
 └── progress.txt           # Development progress log
 ```
-
-## Notes
-
-- Reality-check report: [`agent/AGENT_ARCHITECTURE_REVIEW.md`](./agent/AGENT_ARCHITECTURE_REVIEW.md)
 
 ## Key Differences: Original vs Agent
 
