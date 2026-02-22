@@ -60,7 +60,7 @@
         "cd agent/orchestrator && npx tsc --noEmit passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Use LangFuse REST API to verify: curl -u public_key:secret_key http://localhost:3500/api/public/traces. The orchestrator should log 'LangFuse enabled' or 'LangFuse disabled (no keys)' on startup."
     },
     {

@@ -26,3 +26,14 @@
   - generation.end() accepts usage object, span.end() accepts level/statusMessage
   - flushAsync() needed to ensure data sent before process ends
 ---
+## 2026-02-22 - US-003: Orchestrator Config & Service Restart
+- Updated pideploy-orchestrator.service to load .env.langfuse
+- Restarted orchestrator — heartbeat trace appeared in LangFuse API immediately
+- Created test task (instance_start) — LangFuse captured 7 observations (generations + tool spans)
+- Token usage visible: input=8, output=93 for first generation
+- Tags working: ['instance_start', 'failure'] / ['heartbeat', 'success']
+- **Learnings:**
+  - LangFuse v2 auto-creates project/keys from LANGFUSE_INIT_* env vars on first boot
+  - API endpoint: GET /api/public/traces with Basic auth (publicKey:secretKey)
+  - Observations include type (GENERATION/SPAN), model, usage
+---
