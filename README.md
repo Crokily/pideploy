@@ -45,6 +45,10 @@ piDeploy/
 - **Infrastructure**: Docker, Nginx, Neon PostgreSQL, Prisma
 - **Runtime Model**: minimax-m2.5-free [opencode] (development)
 
+## Architecture Review
+
+> ⚠️ **[Agent 架构审查报告](agent/AGENT-ARCHITECTURE-REVIEW.md)** — 对 agent 版本的深度分析，指出当前 AI agent 层本质上只是一个"传令官"，未发挥自主决策和验证闭环能力，反而引入了不确定性和新 bug。
+
 ## Data Directory
 
 Instance data lives at `/data/clawdeploy/` (not moved during rename).
